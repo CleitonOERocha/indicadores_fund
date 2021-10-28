@@ -20,38 +20,39 @@ indicadores_acao <- function(cod_acao){
   # retirando colunas não necessárias, que tratam de oscilações do preço da ação
   dados_fundamentus <- dados_fundamentus[,-c(1,2)]
   
-  # criando um dataframe novo com os dados organizados por indicadores e valores
-  dados_fundamentus2 <- data.frame(indicadores_fund = c(dados_fundamentus[,"Indicadores fundamentalistas"],
-                                                        dados_fundamentus[,"Indicadores fundamentalistas.2"]),
-                                   valores = c(dados_fundamentus[,"Indicadores fundamentalistas.1"],
-                                               dados_fundamentus[,"Indicadores fundamentalistas.3"]))
+  dados_fundamentus1 <- dados_fundamentus[,1:2]
+  dados_fundamentus2 <- dados_fundamentus[,3:4]
+  
+  dados_fundamentus_all <- rbind(dados_fundamentus1, dados_fundamentus2)
+  
+  dados_fundamentus_all <- dados_fundamentus_all %>% `colnames<-`(c("indicador", "valor"))
   
   # retirando "?" no começo de cada termo
-  dados_fundamentus2$indicadores_fund <- sub("^.", "", dados_fundamentus2$indicadores_fund)
+  dados_fundamentus_all$indicador <- sub("^.", "", dados_fundamentus_all$indicador)
   
   # renomeando algumas colunas
-  dados_fundamentus2$indicadores_fund <- recode(dados_fundamentus2$indicadores_fund,
-                                                `Cres. Rec (5a)`= "Cres.Rec.Ultimos.5anos",
-                                                `EV / EBIT` = "EV_EBIT",
-                                                `Marg. EBIT` = "Marg.EBIT",
-                                                `Div. Yield` = "Div.Yield",
-                                                `Marg. Líquida` = "Marg.Liquida",
-                                                `Liquidez Corr` = "Liquidez.Corrente",
-                                                `EBIT / Ativo` = "EBIT_Ativo",
-                                                `Div Br/ Patrim` = "Div.Bruta_Patrimonio",
-                                                `P/Cap. Giro` = "P_Cap.Giro",
-                                                `Marg. Bruta` = "Margem.Bruta",
-                                                `Giro Ativos` = "Giro.Ativos",
-                                                `P/Ativ Circ Liq` = "P_Ativo.Circ.Liq",
-                                                `EV / EBITDA` = "EV_EBITDA")
+  dados_fundamentus_all$indicador <- recode(dados_fundamentus_all$indicador,
+                                            `Cres. Rec (5a)`= "Cres.Rec.Ultimos.5anos",
+                                            `EV / EBIT` = "EV_EBIT",
+                                            `Marg. EBIT` = "Marg.EBIT",
+                                            `Div. Yield` = "Div.Yield",
+                                            `Marg. Líquida` = "Marg.Liquida",
+                                            `Liquidez Corr` = "Liquidez.Corrente",
+                                            `EBIT / Ativo` = "EBIT_Ativo",
+                                            `Div Br/ Patrim` = "Div.Bruta_Patrimonio",
+                                            `P/Cap. Giro` = "P_Cap.Giro",
+                                            `Marg. Bruta` = "Margem.Bruta",
+                                            `Giro Ativos` = "Giro.Ativos",
+                                            `P/Ativ Circ Liq` = "P_Ativo.Circ.Liq",
+                                            `EV / EBITDA` = "EV_EBITDA")
   
   
   # criando coluna com nome da ação e alterando a estrutura do banco de dados
-  dados_fundamentus2 <- dados_fundamentus2 %>%
+  dados_fundamentus_all <- dados_fundamentus_all %>%
     mutate(Acao = cod_acao) %>%
-    spread(key = indicadores_fund, value = valores)
+    spread(key = indicador, value = valor)
   
-
+  
 }
 
 # vetor com ações listadas no ibovespa ou no indice small caps
@@ -78,7 +79,7 @@ bovespa <- c("VALE3", "ITUB4","B3SA3","PETR4", "BBDC4", "PETR3","ABEV3",
 )
 
 # aplicando loop para obter os indicadores das ações armazenados em um só dataframe
-indicadores_fundamentalistas <- do.call(rbind.data.frame,lapply(bovespa, indicadores_acao))
+indicadores_fundamentalistas <- map_df(bovespa, indicadores_acao)
 
 # Transformando "-" em NA
 indicadores_fundamentalistas[indicadores_fundamentalistas == "-"] <- NA
