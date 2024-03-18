@@ -1,18 +1,28 @@
 
+
 #########################################################################################################
 ############################ Obtendo indicadores fundamentalistas #######################################
 #########################################################################################################
-#####   ESCRITO POR:      Cleiton Rocha - www.linkedin.com/in/cleitonoerocha/
-#####   EMAIL:  cleitonrocha@sei.ba.gov.br // cleitonotavio058@gmail.com 
-#####   LICENÇA:          GPLv3
+#####   ESCRITO POR: Cleiton Rocha - www.linkedin.com/in/cleitonoerocha/
+#####   EMAIL: cleitonotavio058@gmail.com 
+#####   LICENÇA: GPLv3
 #####   Data: 20/01/2021
 #########################################################################################################
 #########################################################################################################
 
 library(tidyverse)
 library(ralger)
+library(lubridate)
 
-indicadores_acao <- function(cod_acao){
+#########################################################################
+##### Função de leitura -------------------------------------------------
+#########################################################################
+
+# argumento da função é 'cod_acao' = ticker do ativo, ex. PETR4, BBDC3, etc.
+
+fn_obter_indicadores_acao = function(cod_acao){
+  
+  tryCatch({
   
   # obtendo tabela com dados fundamentalistas
   dados_fundamentus <- table_scrap(paste0("https://www.fundamentus.com.br/detalhes.php?papel=",cod_acao),choose = 3)
@@ -31,29 +41,69 @@ indicadores_acao <- function(cod_acao){
   dados_fundamentus_all$indicador <- sub("^.", "", dados_fundamentus_all$indicador)
   
   # renomeando algumas colunas
-  dados_fundamentus_all$indicador <- recode(dados_fundamentus_all$indicador,
-                                            `Cres. Rec (5a)`= "Cres.Rec.Ultimos.5anos",
-                                            `EV / EBIT` = "EV_EBIT",
-                                            `Marg. EBIT` = "Marg.EBIT",
-                                            `Div. Yield` = "Div.Yield",
-                                            `Marg. Líquida` = "Marg.Liquida",
-                                            `Liquidez Corr` = "Liquidez.Corrente",
-                                            `EBIT / Ativo` = "EBIT_Ativo",
-                                            `Div Br/ Patrim` = "Div.Bruta_Patrimonio",
-                                            `P/Cap. Giro` = "P_Cap.Giro",
-                                            `Marg. Bruta` = "Margem.Bruta",
-                                            `Giro Ativos` = "Giro.Ativos",
-                                            `P/Ativ Circ Liq` = "P_Ativo.Circ.Liq",
-                                            `EV / EBITDA` = "EV_EBITDA")
+  dados_fundamentus_all$indicador <- dplyr::recode(dados_fundamentus_all$indicador,
+                                                    `Cres. Rec (5a)`= "Cres.Rec.Ultimos.5anos",
+                                                    `EV / EBIT` = "EV_EBIT",
+                                                    `Marg. EBIT` = "Marg.EBIT",
+                                                    `Div. Yield` = "Div.Yield",
+                                                    `Marg. Líquida` = "Marg.Liquida",
+                                                    `Liquidez Corr` = "Liquidez.Corrente",
+                                                    `EBIT / Ativo` = "EBIT_Ativo",
+                                                    `Div Br/ Patrim` = "Div.Bruta_Patrimonio",
+                                                    `P/Cap. Giro` = "P_Cap.Giro",
+                                                    `Marg. Bruta` = "Margem.Bruta",
+                                                    `Giro Ativos` = "Giro.Ativos",
+                                                    `P/Ativ Circ Liq` = "P_Ativo.Circ.Liq",
+                                                    `EV / EBITDA` = "EV_EBITDA")
   
   
   # criando coluna com nome da ação e alterando a estrutura do banco de dados
   dados_fundamentus_all <- dados_fundamentus_all %>%
-    mutate(Acao = cod_acao) %>%
-    spread(key = indicador, value = valor)
+    dplyr::mutate(Acao = cod_acao) %>%
+    tidyr::spread(key = indicador, value = valor)
+  
+  return(dados_fundamentus_all)
+  
+  }, error = function(e){message("Erro no cód: ", cod_acao, " | O ticker pode não existir mais")}
+  
+  )
   
   
 }
+
+#########################################################################
+##### Função de tratamento ----------------------------------------------
+#########################################################################
+
+# argumento da função é 'vetor_ativos' = um ou mais ativos (em formato de vetor) para serem coletados
+
+fn_tratar_indicadores_acao = function(vetor_ativos){
+
+  # aplicando loop para obter os indicadores das ações armazenados em um só dataframe
+  indicadores_fundamentalistas <- purrr::map_df(vetor_ativos, suppressMessages(fn_obter_indicadores_acao))
+  
+  # Transformando "-" em NA
+  indicadores_fundamentalistas[indicadores_fundamentalistas == "-"] <- NA
+  
+  # retirando "%"
+  indicadores_fundamentalistas <- as.data.frame(sapply(indicadores_fundamentalistas,function(x) gsub("%","", as.character(x))))
+  
+  # convertendo colunas em númericas
+  indicadores_fundamentalistas[,-1] <- as.data.frame(sapply(indicadores_fundamentalistas[,-1], 
+                                                            function(x) as.numeric(as.numeric(gsub(",", ".", gsub("\\.", "",
+                                                                                                                  as.character(x))))))
+  )
+  
+  indicadores_fundamentalistas = indicadores_fundamentalistas %>% dplyr::mutate(data_execucao = Sys.Date())
+  
+  return(indicadores_fundamentalistas)
+
+}
+
+
+#########################################################################
+##### Execução ----------------------------------------------------------
+#########################################################################
 
 # vetor com ações listadas no ibovespa ou no indice small caps
 bovespa <- c("VALE3", "ITUB4","B3SA3","PETR4", "BBDC4", "PETR3","ABEV3",
@@ -78,32 +128,27 @@ bovespa <- c("VALE3", "ITUB4","B3SA3","PETR4", "BBDC4", "PETR3","ABEV3",
              "VIVA3", "VLID3","VULC3","WIZS3" 
 )
 
-# aplicando loop para obter os indicadores das ações armazenados em um só dataframe
-indicadores_fundamentalistas <- map_df(bovespa, indicadores_acao)
+# Aplicação da função para vetor 'bovespa'
+indicadores_fundamentalistas = fn_tratar_indicadores_acao(bovespa)
 
-# Transformando "-" em NA
-indicadores_fundamentalistas[indicadores_fundamentalistas == "-"] <- NA
 
-# retirando "%"
-indicadores_fundamentalistas <- as.data.frame(sapply(indicadores_fundamentalistas,function(x) gsub("%","", as.character(x))))
-
-# convertendo colunas em númericas
-indicadores_fundamentalistas[,-1] <- as.data.frame(sapply(indicadores_fundamentalistas[,-1], 
-                                                          function(x) as.numeric(as.numeric(gsub(",", ".", gsub("\\.", "",
-                                                                                                                as.character(x))))))
-)
+#########################################################################
+##### Exemplo de análises rápidas com o dataframe gerado ----------------
+#########################################################################
 
 # procurando empresas cuja multiplicação do P/L pelo P/VP seja menor que 22,5
 indicadores_fundamentalistas$descontadas <- ifelse(indicadores_fundamentalistas$`P/L`*indicadores_fundamentalistas$`P/VP` <= 22.5 &
                                                      indicadores_fundamentalistas$`P/L`*indicadores_fundamentalistas$`P/VP` > 0, 1, 0)
 
 # criando novo dataset com as empresas descontadas
-empresas_descontadas <- indicadores_fundamentalistas %>% filter(descontadas == 1)
+empresas_descontadas <- indicadores_fundamentalistas %>% dplyr::filter(descontadas == 1)
 
 # brincando com os indicadores
-empresas_descontadas <- empresas_descontadas %>% filter(ROE > 10 &
-                                                          Cres.Rec.Ultimos.5anos > 0 &
-                                                          Div.Bruta_Patrimonio <= 1.5 &
-                                                          Div.Bruta_Patrimonio > 0)
+empresas_descontadas <- empresas_descontadas %>% dplyr::filter(ROE > 10 &
+                                                               Cres.Rec.Ultimos.5anos > 0 &
+                                                               Div.Bruta_Patrimonio <= 1.5 &
+                                                               Div.Bruta_Patrimonio > 0)
+
+
 
 
