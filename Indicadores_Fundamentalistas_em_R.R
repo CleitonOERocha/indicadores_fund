@@ -78,21 +78,31 @@ fn_obter_indicadores_acao = function(cod_acao){
 # argumento da função é 'vetor_ativos' = um ou mais ativos (em formato de vetor) para serem coletados
 
 fn_tratar_indicadores_acao = function(vetor_ativos){
+  
+  if(length(vetor_ativos) > 1){
 
   # aplicando loop para obter os indicadores das ações armazenados em um só dataframe
   indicadores_fundamentalistas <- purrr::map_df(vetor_ativos, suppressMessages(fn_obter_indicadores_acao))
+  
+  } else {
+    
+    indicadores_fundamentalistas = fn_obter_indicadores_acao(vetor_ativos)
+    
+  }
   
   # Transformando "-" em NA
   indicadores_fundamentalistas[indicadores_fundamentalistas == "-"] <- NA
   
   # retirando "%"
-  indicadores_fundamentalistas <- as.data.frame(sapply(indicadores_fundamentalistas,function(x) gsub("%","", as.character(x))))
+  indicadores_fundamentalistas <- indicadores_fundamentalistas %>%
+                                      dplyr::mutate(dplyr::across(dplyr::everything(), 
+                                                                  ~str_replace_all(.x, "%", "")))
   
   # convertendo colunas em númericas
-  indicadores_fundamentalistas[,-1] <- as.data.frame(sapply(indicadores_fundamentalistas[,-1], 
-                                                            function(x) as.numeric(as.numeric(gsub(",", ".", gsub("\\.", "",
-                                                                                                                  as.character(x))))))
-  )
+  indicadores_fundamentalistas <- indicadores_fundamentalistas %>%
+                                      dplyr::mutate(dplyr::across(-1, ~gsub(",", ".", 
+                                                                            gsub("\\.", "", .x)) %>% as.numeric))
+  
   
   indicadores_fundamentalistas = indicadores_fundamentalistas %>% dplyr::mutate(data_execucao = Sys.Date())
   
@@ -128,7 +138,10 @@ bovespa <- c("VALE3", "ITUB4","B3SA3","PETR4", "BBDC4", "PETR3","ABEV3",
              "VIVA3", "VLID3","VULC3","WIZS3" 
 )
 
-# Aplicação da função para vetor 'bovespa'
+# Aplicando para um ativo
+#indicadores_fundamentalistas = fn_tratar_indicadores_acao('GGBR4')
+
+# Aplicando para um vetor de ativos 'bovespa'
 indicadores_fundamentalistas = fn_tratar_indicadores_acao(bovespa)
 
 
